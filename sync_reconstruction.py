@@ -11,6 +11,8 @@ from bot_api import (BatchSyncComplete, BatchSyncStatus, BatchSynced, BotEvents,
 import os
 import sys
 import configargparse
+from google.cloud import pubsub_v1
+
 
 class AdFile:
     def __init__(self, filename: pathlib.Path):

@@ -1,4 +1,5 @@
 git+git://github.com/cml-cs-iastate/bot_api@0.8
+google-cloud-pubsub
 bs4
 more_itertools
 configargparse
