@@ -55,26 +55,15 @@ def last_request_time(ad_dir: pathlib.Path) -> int:
             return int(AdFile(abs_ad_filepath).ad_seen_at)
         except (AttributeError, ValueError) as e:
             # Possible file corruption
+            print("FILE CORRUPTION IN FOLLOWING DIRECTORY")
             print(abs_ad_filepath)
             continue
-            abs_ad_filepath: pathlib.Path = ad_dir / ad_filename
-            return int(AdFile(abs_ad_filepath).ad_seen_at)
-            print(ad_filename)
     else:
         return -1
 
-    
-if __name__ == "__main__":
-    p = configargparse.ArgumentParser()
-
-    p.add('--ad-dir',
-          required=True,
-          help='Base directory where all ad source files are stored',
-          env_var='SOURCE_AD_STORAGE_DIR')
-
-    args = p.parse_args()
-    source_ad_dir = args.ad_dir
-    base_dir = Path(source_ad_dir)
+def reconstruct_sync_messages(base_dir: pathlib.Path) -> Iterator[BatchSynced]:
+    """Reconstruct a batch sync message from an existing batch directory
+    Returns an iterator of types `BatchSynced`"""
     new_data_dirs = [x.parent for x in base_dir.glob("*/*#*/*/noAds.csv")]
 
     for ad_dir in new_data_dirs:
@@ -97,5 +86,19 @@ if __name__ == "__main__":
                                        requests=total_requests, host_hostname=ad.host_hostname,
                                        location=ad.location, ads_found=ad_count, timestamp=last_request)
         sync_msg = BatchSynced(completion_msg, BatchSyncComplete())
-        print(sync_msg.to_json())
-        print(f"total_requests: {total_requests}, ads: {ad_count}, non_ads: {non_ads}, ip: {external_ip}")
+        yield sync_msg
+
+if __name__ == "__main__":
+    p = configargparse.ArgumentParser()
+
+    p.add('--ad-dir',
+          required=True,
+          help='Base directory where all ad source files are stored',
+          env_var='SOURCE_AD_STORAGE_DIR')
+
+    args = p.parse_args()
+    source_ad_dir = Path(args.ad_dir)
+
+    for sync_msg in reconstruct_sync_messages(source_ad_dir):
+        print(sync_msg.to_json().encode())
+
