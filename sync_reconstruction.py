@@ -97,10 +97,24 @@ if __name__ == "__main__":
           required=True,
           help='Base directory where all ad source files are stored',
           env_var='SOURCE_AD_STORAGE_DIR')
+    p.add("--pubsub-creds-file",
+          help="filepath of service account key for CyAdsTracker pubsub",
+          required=True,
+          env_var="GOOGLE_APPLICATION_CREDENTIALS")
+    p.add("--projectid",
+          required=True,
+          help="google project id used for CyAdsTracker pubsub",
+          env_var="GOOGLE_CLOUD_PROJECT")
+    p.add("--sync-pubsub-topic",
+          help="Topic to publish sync messages to",
+          required=True,
+          env_var="SYNC_PUBSUB_TOPIC")
 
     args = p.parse_args()
     source_ad_dir = Path(args.ad_dir)
 
     for sync_msg in reconstruct_sync_messages(source_ad_dir):
-        print(sync_msg.to_json().encode())
+        encoded_sync_msg = sync_msg.to_json().encode()
+        print(encoded_sync_msg)
+        # encoded_sync_msg is in the correct form for sending to pubsub
 
