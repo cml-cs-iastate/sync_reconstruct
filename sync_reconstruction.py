@@ -12,7 +12,9 @@ import os
 import sys
 import configargparse
 from google.cloud import pubsub_v1
-
+import csv
+import itertools
+from typing import List
 
 class AdFile:
     def __init__(self, filename: pathlib.Path):
@@ -63,6 +65,7 @@ def last_request_time(ad_dir: pathlib.Path) -> int:
     else:
         return -1
 
+
 def reconstruct_sync_messages(base_dir: pathlib.Path) -> Iterator[BatchSynced]:
     """Reconstruct a batch sync message from an existing batch directory
     Returns an iterator of types `BatchSynced`"""
@@ -90,9 +93,16 @@ def reconstruct_sync_messages(base_dir: pathlib.Path) -> Iterator[BatchSynced]:
         sync_msg = BatchSynced(completion_msg, BatchSyncComplete())
         yield sync_msg
 
+
+def messages_from_file(file: pathlib.Path) -> List[BatchSynced]:
+    with file.open() as f:
+        messages = f.readlines()
+    return [BatchSynced.from_json(message) for message in messages]
+
+
 if __name__ == "__main__":
     p = configargparse.ArgumentParser()
-
+    p.add("-c", "--config", is_config_file=True)
     p.add('--ad-dir',
           required=True,
           help='Base directory where all ad source files are stored',
@@ -109,12 +119,38 @@ if __name__ == "__main__":
           help="Topic to publish sync messages to",
           required=True,
           env_var="SYNC_PUBSUB_TOPIC")
+    p.add_argument("--only-gen-sync",
+                   action="store_true")
+    p.add_argument("--use-csv", required=False, action="store_true")
+    p.add_argument("--csv-file", required=False)
+    p.add_argument("--start", type=int, required=False)
+    p.add_argument("--end", type=int, required=False)
 
     args = p.parse_args()
     source_ad_dir = Path(args.ad_dir)
 
-    for sync_msg in reconstruct_sync_messages(source_ad_dir):
-        encoded_sync_msg = sync_msg.to_json().encode()
-        print(encoded_sync_msg)
-        # encoded_sync_msg is in the correct form for sending to pubsub
 
+    publisher = pubsub_v1.PublisherClient()
+    topic_path = publisher.topic_path(project=args.projectid, topic=args.sync_pubsub_topic)
+    print(topic_path)
+
+    if args.use_csv:
+        csv_file = pathlib.Path(args.csv_file)
+        sync_messages = messages_from_file(csv_file)
+    else:
+        if args.csv_file:
+            csv_file = Path(args.csv_file)
+        else:
+            csv_file = Path("reconstructed_sync_messages.csv")
+        sync_messages = list(reconstruct_sync_messages(source_ad_dir))
+        with open(csv_file, "wb+") as f:
+            f.writelines([f"{x.to_json()}\n".encode() for x in sync_messages])
+    if args.only_gen_sync:
+        print("finished saving sync messages to csv file, exiting")
+        sys.exit()
+    filtered_sync_messages = itertools.islice(sync_messages, args.start, args.end)
+    for count, sync_msg in enumerate(filtered_sync_messages):
+        print(count)
+        encoded_sync_msg = sync_msg.to_json().encode()
+        # encoded_sync_msg is in the correct form for sending to pubsub
+        publisher.publish(topic_path, encoded_sync_msg)
