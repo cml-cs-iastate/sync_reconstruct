@@ -15,6 +15,7 @@ from google.cloud import pubsub_v1
 import csv
 import itertools
 from typing import List
+from time import sleep
 
 class AdFile:
     def __init__(self, filename: pathlib.Path):
@@ -154,3 +155,4 @@ if __name__ == "__main__":
         encoded_sync_msg = sync_msg.to_json().encode()
         # encoded_sync_msg is in the correct form for sending to pubsub
         publisher.publish(topic_path, encoded_sync_msg)
+        sleep(1)
